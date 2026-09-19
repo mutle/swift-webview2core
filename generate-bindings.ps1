@@ -11,6 +11,27 @@ function Get-PackageString {
         return "  <package id=""$($Package.Id)"" version=""$($Package.Version)"" />`n"
     }
 }
+
+function Add-WindowsGuards {
+    param(
+        [string]$ProjectDir
+    )
+
+    Get-ChildItem -Path $ProjectDir -Filter *.swift -Recurse |
+        Sort-Object -Property FullName |
+        ForEach-Object {
+            $Content = [System.IO.File]::ReadAllText($_.FullName)
+            if (-not $Content.StartsWith("#if os(Windows)")) {
+                $Content = "#if os(Windows)`n$($Content.TrimEnd())`n#endif`n"
+                [System.IO.File]::WriteAllText(
+                    $_.FullName,
+                    $Content,
+                    [System.Text.UTF8Encoding]::new($false)
+                )
+            }
+        }
+}
+
 function Restore-Nuget {
     param(
         [string]$PackagesDir
@@ -68,10 +89,31 @@ function Copy-Project {
         $ProjectGeneratedDir = if ($ProjectName -eq "CWinRT") { "$ProjectName" } else { "$ProjectName\Generated" }
 
         $ProjectDir = Join-Path $PSScriptRoot "Sources\$ProjectGeneratedDir"
+        $PreservedModuleMaps = @{}
+        if (Test-Path $ProjectDir) {
+            Get-ChildItem -Path $ProjectDir -Filter module.modulemap -Recurse |
+                ForEach-Object {
+                    $RelativePath = $_.FullName.Substring($ProjectDir.Length).TrimStart('\', '/')
+                    $PreservedModuleMaps[$RelativePath] = [System.IO.File]::ReadAllBytes($_.FullName)
+                }
+        }
         if (Test-Path $ProjectDir) {
             Remove-Item -Path $ProjectDir -Recurse -Force
         }
         Copy-Item -Path $OutputLocation\Sources\$ProjectName -Destination $ProjectDir -Recurse -Force
+
+        $PreservedModuleMaps.GetEnumerator() |
+            Sort-Object -Property Key |
+            ForEach-Object {
+                $ModuleMapPath = Join-Path $ProjectDir $_.Key
+                $ModuleMapDir = Split-Path -Parent $ModuleMapPath
+                if (-not (Test-Path $ModuleMapDir)) {
+                    New-Item -ItemType Directory -Path $ModuleMapDir -Force | Out-Null
+                }
+                [System.IO.File]::WriteAllBytes($ModuleMapPath, $_.Value)
+            }
+
+        Add-WindowsGuards -ProjectDir $ProjectDir
     }
 }
 

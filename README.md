@@ -5,6 +5,13 @@
 
 Swift Language Bindings for WinUI
 
+## Platform Support
+
+`WebView2Core` uses the same SwiftPM package, product, and target graph on every
+host. The generated WebView2 API is available on Windows; on other platforms,
+the product remains importable as an empty module so cross-platform package
+graphs can resolve and build without manifest-time host selection.
+
 ## APIs
 These projections contains the WinUI APIs which are part of the Windows App SDK, (i.e. `Microsoft.UI.Xaml.*`). See official documentation for more information on these components:
 
